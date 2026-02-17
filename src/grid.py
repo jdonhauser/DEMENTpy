@@ -713,5 +713,5 @@ class Grid():
         # last: assign microbes to each grid box randomly based on prior densities
         choose_taxa = np.zeros((self.n_taxa,self.gridsize), dtype='int8')
         for i in range(self.n_taxa):
-            choose_taxa[i,:] = np.random.binomial(1, frequencies[i], self.gridsize)
+            choose_taxa[i,:] = np.random.binomial(1, frequencies.iloc[i], self.gridsize)
         self.Microbes.loc[np.ravel(choose_taxa,order='F')==0] = np.float32(0) # NOTE order='F'

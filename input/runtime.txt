@@ -1,10 +1,10 @@
-pulse	10
-end_time	365
+pulse	2
+end_time	60
 x	10
 y	10
 gridsize	100
-n_taxa	100
-fb	0.0
+n_taxa	50
+fb	0.3
 taxa_per_box	0.01
 n_enzymes	50
 n_substrates	12
@@ -26,3 +26,4 @@ direct	0.95
 dist	1
 interval	1
 output_CSV	1
+dispersal	0
