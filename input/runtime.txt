@@ -1,5 +1,5 @@
-pulse	2
-end_time	60
+pulse	3
+end_time	365
 x	10
 y	10
 gridsize	100

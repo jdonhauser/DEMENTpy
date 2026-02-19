@@ -218,6 +218,8 @@ class Grid():
         Decay_Org = self.Monomer_ratios[is_org].mul(self.DecayRates.values,axis=0)
         # inputs of organic and mineral monomers
         #Input_Org = MR_transition[is_org].mul(self.MonInput[is_org].tolist(),axis=0)
+        # add temperature dependence for VOC input using arrhenius relationship, with Ea = 20 and A = 40000, according to https://doi.org/10.1016/j.eti.2023.103226
+        self.MonInput.loc["VOC"] = Arrhenius(self.MonInput.loc["VOC"],20,self.temp[day])
         # calculate stoichiometry for VOCs
         # Calculate total mass of each substrate (C+N+P) and derive substrate stoichiometry
         rss_VOC             = self.Substrates_VOC.sum(axis=1) 
@@ -245,6 +247,8 @@ class Grid():
         # Start calculating monomer uptake
         # Caculate uptake enzyme kinetic parameters, multiplied by moisture multiplier accounting for the diffusivity implications
         Uptake_Vmax = Arrhenius(self.Uptake_Vmax0, self.Uptake_Ea, self.temp[day]) * Allison(0.1, self.wp_fc, self.psi[day])
+        # make uptake of VOC (Mon1) independent of water potential
+        Uptake_Vmax.loc["Mon1"] = Arrhenius(self.Uptake_Vmax0.loc["Mon1"], self.Uptake_Ea.loc["Mon1"], self.temp[day]) 
         Uptake_Km   = Arrhenius(self.Uptake_Km0,   self.Km_Ea,     self.temp[day])
 
         # Equation for hypothetical potential uptake (per unit of compatible uptake protein)
@@ -573,6 +577,8 @@ class Grid():
         leaching_rate = monomer_leaching(self.psi[day])
         self.Monomers.loc[is_NH4,"N"] -= self.Monomers.loc[is_NH4,"N"] * leaching_rate
         self.Monomers.loc[is_PO4,"P"] -= self.Monomers.loc[is_PO4,"P"] * leaching_rate
+        # set VOC to zero, assuming that all VOCs that are not taken up diffuse
+        self.Monomers.loc["VOC"] = 0
         
         # Restore the index to taxa series
         self.Microbes.index = Mic_index
