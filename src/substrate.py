@@ -65,11 +65,11 @@ class Substrate():
             MonomersProduced_df: dataframe; row:substrate; col:monomers; all rows should sum to 1
         """
         
-        MonomersProduced_array = np.concatenate((np.array([0]*self.n_substrates*2).reshape((self.n_substrates,2),order='F'),np.diagflat([1]*self.n_substrates)),axis=1)
+        MonomersProduced_array = np.concatenate((np.array([0]*self.n_substrates*3).reshape((self.n_substrates,3),order='F'),np.diagflat([1]*self.n_substrates)),axis=1)
         index   = ['Sub'+str(i) for i in range(1,self.n_substrates+1)]
-        columns = ['Mon'+str(i) for i in range(-1,self.n_substrates+1)]
+        columns = ['Mon'+str(i) for i in range(-2,self.n_substrates+1)]
         MonomersProduced_df = pd.DataFrame(data=MonomersProduced_array,index=index,columns=columns,dtype='int8')
-        MonomersProduced_df.rename(columns = {'Mon-1':"NH4",'Mon0':"PO4",'Mon1':"DeadMic",'Mon2':"DeadEnz"},inplace=True)
+        MonomersProduced_df.rename(columns = {'Mon-2':"VOC",'Mon-1':"NH4",'Mon0':"PO4",'Mon1':"DeadMic",'Mon2':"DeadEnz"},inplace=True)
 
         return MonomersProduced_df
         

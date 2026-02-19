@@ -24,7 +24,7 @@ class Monomer():
              parameters: dataframe; model parameters
         """
 
-        self.n_monomers  = int(runtime.loc['n_substrates',1]) + 2                  # Number of monomers within the system
+        self.n_monomers  = int(runtime.loc['n_substrates',1]) + 3                  # Number of monomers within the system
         self.n_uptake    = int(runtime.loc['n_uptake',1])                          # Number of uptake transporters for each taxon
         self.Monomer_Substrate_Ratio = runtime.loc['Monomer_Substrate_Ratio',1]    # amount of initial monomer relative to substrate per grid box; default:0
         self.Uptake_per_monomer      = int(runtime.loc['Uptake_per_monomer',1])    # number of transporters per monomer;default:1
@@ -46,7 +46,7 @@ class Monomer():
         
         # Monomer pool sizes for all elements
         Monomers_array = np.concatenate((np.stack([[0,self.Init_NH4,0],[0,0,self.Init_PO4]]),substrates_init.values*self.Monomer_Substrate_Ratio),axis=0)    
-        index = ["NH4","PO4","DeadMic","DeadEnz"] + ["Mon" + str(i) for i in range(3,self.n_monomers-2 + 1)]  #NOTE: index starts from 3
+        index = ["VOC","NH4","PO4","DeadMic","DeadEnz"] + ["Mon" + str(i) for i in range(3,self.n_monomers-3 + 1)]  #NOTE: index starts from 3
         Monomers_df = pd.DataFrame(data=Monomers_array, index=index, columns=["C","N","P"],dtype='float32')
         
         return Monomers_df

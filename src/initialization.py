@@ -45,8 +45,10 @@ def initialize_data(runtime_parameters, site):
 
     #...an instance of Substrate class 
     Substrates = Substrate(runtime_parameters,parameters,substrates_init)
-    #...substrate initial pool size
+    #...substrate initial pool size including VOC
     substrates_initial_pool = Substrates.Substrates_start
+    #...substrate intial pool without VOC
+    substrates_initial_pool_noVOC =  substrates_initial_pool[substrates_initial_pool.index!="VOC"]
     #...substrate input rate
     substrates_input_rate = Substrates.substrate_input(sub_mon_input)
     #...substrates-produced monomers
@@ -116,7 +118,8 @@ def initialize_data(runtime_parameters, site):
     gridsize = int(runtime_parameters.loc['gridsize',1])
     
     Data_Dictionary = {
-        "Substrates": expand(substrates_initial_pool,gridsize),
+        "Substrates": expand(substrates_initial_pool_noVOC,gridsize),
+        "Substrates_VOC": expand(substrates_initial_pool, gridsize),
         "SubInput":   expand(substrates_input_rate,gridsize),
         "ReqEnz":           substrates_req_enzyme,
         "MonomersProduced": substrates_produced_monomers,

@@ -45,11 +45,12 @@ class Grid():
         self.n_taxa         = int(runtime.loc["n_taxa",1])
         self.n_substrates   = int(runtime.loc["n_substrates",1])
         self.n_enzymes      = int(runtime.loc["n_enzymes",1])
-        self.n_monomers     = self.n_substrates + 2
+        self.n_monomers     = self.n_substrates + 3 # increase from +2 to +3 to account for VOCs
         
         #Degradation
         #self.Substrates_init = data_init['Substrates']                    # Substrates initialized
         self.Substrates      = data_init['Substrates'].copy(deep=True)    # Substrates;df; w/ .copy() avoiding mutation
+        self.Substrates_VOC  = data_init['Substrates_VOC'].copy(deep=True) # Substrates including VOC pool to get stoichiometry of VOCs
         self.SubInput        = data_init['SubInput']                      # Substrate inputs
         #self.Enzymes_init    = data_init['Enzymes']                       # Initial pool of Enzymes
         self.Enzymes         = data_init['Enzymes'].copy(deep=True)       # Enzymes
@@ -206,7 +207,7 @@ class Grid():
         
 
         # Indices
-        is_org = (self.Monomers.index != "NH4") & (self.Monomers.index != "PO4") # organic monomers
+        is_org = (self.Monomers.index != "NH4") & (self.Monomers.index != "PO4") & (self.Monomers.index != "VOC") # organic monomers without VOC
         #is_mineral = (Monomers.index == "NH4") | (Monomers.index == "PO4")
 
         # Update monomer ratios in each time step with organic monomers following the substrates
@@ -217,9 +218,21 @@ class Grid():
         Decay_Org = self.Monomer_ratios[is_org].mul(self.DecayRates.values,axis=0)
         # inputs of organic and mineral monomers
         #Input_Org = MR_transition[is_org].mul(self.MonInput[is_org].tolist(),axis=0)
+        # calculate stoichiometry for VOCs
+        # Calculate total mass of each substrate (C+N+P) and derive substrate stoichiometry
+        rss_VOC             = self.Substrates_VOC.sum(axis=1) 
+        SubstrateRatios_VOC = self.Substrates_VOC.divide(rss_VOC,axis=0)
+        SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
+        VOC_ratio = SubstrateRatios_VOC.loc["VOC"]
+        Input_VOC = VOC_ratio.mul(self.MonInput.loc["VOC"],axis=0)
+
+        # Update VOC monomer ratio
+        self.Monomer_ratios.loc["VOC"] = VOC_ratio
         #Input_Mineral = MR_transition[is_mineral].mul((self.MonInput[is_mineral]).tolist(),axis=0)
         # Monomer pool determined
-        self.Monomers.loc[is_org] += Decay_Org #+ Input_Org
+        # here temperature dependence function for VOC input could be defined
+        self.Monomers.loc[is_org] += Decay_Org # add organic monomers
+        self.Monomers.loc["VOC"] += Input_VOC
         #self.Monomers.loc[is_mineral] += Input_Mineral
         
         # Get the total mass of each monomer: C+N+P
