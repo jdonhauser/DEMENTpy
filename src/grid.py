@@ -226,7 +226,7 @@ class Grid():
         SubstrateRatios_VOC = self.Substrates_VOC.divide(rss_VOC,axis=0)
         SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
         VOC_ratio = SubstrateRatios_VOC.loc["VOC"]
-        Input_VOC = VOC_ratio.mul(self.MonInput.loc["VOC"],axis=0)
+        self.Input_VOC = VOC_ratio.mul(self.MonInput.loc["VOC"],axis=0)
 
         # Update VOC monomer ratio
         self.Monomer_ratios.loc["VOC"] = VOC_ratio
@@ -234,7 +234,7 @@ class Grid():
         # Monomer pool determined
         # here temperature dependence function for VOC input could be defined
         self.Monomers.loc[is_org] += Decay_Org # add organic monomers
-        self.Monomers.loc["VOC"] += Input_VOC
+        self.Monomers.loc["VOC"] += self.Input_VOC
         #self.Monomers.loc[is_mineral] += Input_Mineral
         
         # Get the total mass of each monomer: C+N+P
@@ -271,7 +271,11 @@ class Grid():
         Uptake              = Max_Uptake.mul(pd.concat([csmu,rsm],axis=1).min(axis=1,skipna=True)/csmu,axis=0) #(Monomer*gridsize) * Taxon
         Uptake.loc[csmu==0] = np.float32(0)
         # End computing monomer uptake
-        
+        # VOC uptake:
+        # per taxon
+        self.VOC_uptake_tax = Uptake.loc["VOC"].sum()
+        # grid total
+        self.VOC_uptake = self.VOC_uptake_tax.sum() # total uptake of VOC monomer across the grid
 
         # Update Monomers
         # By monomer: total uptake (monomer*gridsize) * 3(C-N-P)

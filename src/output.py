@@ -112,6 +112,12 @@ class Output():
         #self.Monomers_Sum      = pd.Series([sum(Monomers_grid["C"])],index=[0])
         #self.NH4Series         = pd.Series([Monomers_grid.loc["NH4","N"]],index=[0])
         #self.PO4Series         = pd.Series([Monomers_grid.loc["PO4","P"]],index=[0])
+
+        # VOCs
+        # Input from litter 
+        self.VOC_litter_input = pd.Series([Monomers_grid.loc["VOC","C"]],index=[0])
+        # Uptake
+        self.VOC_uptake = pd.Series([Monomers_grid.loc["VOC","C"]],index=[0])
         
         # Microbes
         Microbes_grid             = data_init['Microbes'].groupby(level=0,sort=False).sum() 
@@ -148,7 +154,10 @@ class Output():
         #self.EnzymeConSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
         #self.EnzymeIndSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
         self.Enzyme_TaxonSeries = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
-        
+
+        # VOC uptake per taxon
+        self.VOC_uptake_TaxonSeries = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
+
         # Osmolytes: taxon-specific production summed over the grid by taxon
         #self.OsmolyteConSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
         #self.OsmolyteIndSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
@@ -189,6 +198,9 @@ class Output():
         #self.Monomers_Sum   = pd.concat([self.Monomers_Sum, pd.Series([sum(Monomers_grid["C"])],  index=[day+1])], axis=0, sort=False)
         #self.NH4Series      = pd.concat([self.NH4Series, pd.Series([Monomers_grid.loc["NH4","N"]],index=[day+1])], axis=0, sort=False)
         #self.PO4Series      = pd.concat([self.PO4Series, pd.Series([Monomers_grid.loc["PO4","P"]],index=[day+1])], axis=0, sort=False)
+        VOC_input = ecosystem.Input_VOC['C'].groupby(level=0,sort=False).sum()
+        VOC_input.name = self.cycle*year + (day+1)
+        self.VOC_litter_input = pd.concat([self.VOC_litter_input, pd.Series([VOC_input.values[0]], index=[day+1])], axis=0, sort=False)
         
         # Interim Microbes
         #Microbes_interim_grid = ecosystem.Microbes_interim.groupby(level=0,sort=False).sum()
@@ -229,7 +241,12 @@ class Output():
         self.CUE_system = pd.concat([self.CUE_system, pd.Series([ecosystem.CUE_system], index=[day+1],dtype='float32')], axis=0, sort=False)
         # Death toll of stochasticity origin 
         self.Kill       = pd.concat([self.Kill, pd.Series([ecosystem.Kill],index=[day+1],dtype='uint32')], axis=0, sort=False)
-    
+        # VOC uptake
+        VOC_Uptake = ecosystem.VOC_uptake
+        self.VOC_uptake = pd.concat([self.VOC_uptake, pd.Series([VOC_Uptake], index=[day+1])], axis=0, sort=False)
+        # VOC uptake per taxon
+        self.VOC_uptake_TaxonSeries = pd.concat([self.VOC_uptake_TaxonSeries, ecosystem.VOC_uptake_tax],axis=1,sort=False)
+
     
     def microbes_abundance(self,ecosystem,year, day):
         """
