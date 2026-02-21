@@ -66,7 +66,7 @@ class Grid():
         self.Microbes        = data_init['Microbes'].copy(deep=True)      # microbial community after placement
         #self.Monomers_init   = data_init['Monomers']                      # Monomers initialized
         self.Monomers        = data_init['Monomers'].copy(deep=True)      # Monomers
-        self.MonInput        = data_init['MonInput']                      # Inputs of monomers
+        self.MonInput        = data_init['MonInput'].copy(deep=True)      # Inputs of monomers
         self.Uptake_Ea       = data_init['Uptake_Ea']                     # transporter enzyme Ea
         self.Uptake_Vmax0    = data_init['Uptake_Vmax0']                  # transporter Vmax
         self.Uptake_Km0      = data_init['Uptake_Km0']                    # transporter Km
@@ -219,14 +219,15 @@ class Grid():
         # inputs of organic and mineral monomers
         #Input_Org = MR_transition[is_org].mul(self.MonInput[is_org].tolist(),axis=0)
         # add temperature dependence for VOC input using arrhenius relationship, with Ea = 20 and A = 40000, according to https://doi.org/10.1016/j.eti.2023.103226
-        self.MonInput.loc["VOC"] = Arrhenius(self.MonInput.loc["VOC"],20,self.temp[day])
+        monInput_VOC = self.MonInput.loc["VOC"] 
+        monInput_VOC = Arrhenius(monInput_VOC,20,self.temp[day])
         # calculate stoichiometry for VOCs
         # Calculate total mass of each substrate (C+N+P) and derive substrate stoichiometry
         rss_VOC             = self.Substrates_VOC.sum(axis=1) 
         SubstrateRatios_VOC = self.Substrates_VOC.divide(rss_VOC,axis=0)
         SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
         VOC_ratio = SubstrateRatios_VOC.loc["VOC"]
-        self.Input_VOC = VOC_ratio.mul(self.MonInput.loc["VOC"],axis=0)
+        self.Input_VOC = VOC_ratio.mul(monInput_VOC,axis=0)
 
         # Update VOC monomer ratio
         self.Monomer_ratios.loc["VOC"] = VOC_ratio
@@ -271,9 +272,10 @@ class Grid():
         Uptake              = Max_Uptake.mul(pd.concat([csmu,rsm],axis=1).min(axis=1,skipna=True)/csmu,axis=0) #(Monomer*gridsize) * Taxon
         Uptake.loc[csmu==0] = np.float32(0)
         # End computing monomer uptake
-        # VOC uptake:
+        # VOC uptake in terms of C (mutiply total uptake by fraction of C):
         # per taxon
         self.VOC_uptake_tax = Uptake.loc["VOC"].sum()
+        self.VOC_uptake_tax = self.VOC_uptake_tax.mul(VOC_ratio.iloc[0,0])
         # grid total
         self.VOC_uptake = self.VOC_uptake_tax.sum() # total uptake of VOC monomer across the grid
 
