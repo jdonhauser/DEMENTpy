@@ -105,13 +105,15 @@ class Output():
         self.SubstratesSeries     = Substrates_grid['C']
         #self.Substrates_Sum      = pd.Series([Substrates_grid['C'].sum()],index=[0])
         
-        # Monomers
+        # Monomers (at the end of each iteration)
         Monomers_grid           = data_init['Monomers'].groupby(level=0,sort=False).sum()
         Monomers_grid['C'].name = 0
         self.MonomersSeries     = Monomers_grid['C']
         #self.Monomers_Sum      = pd.Series([sum(Monomers_grid["C"])],index=[0])
         #self.NH4Series         = pd.Series([Monomers_grid.loc["NH4","N"]],index=[0])
         #self.PO4Series         = pd.Series([Monomers_grid.loc["PO4","P"]],index=[0])
+        # total monomer uptake
+        self.Uptake_total = pd.Series([sum(Monomers_grid["C"])],index=[0])
 
         # VOCs
         # Input from litter 
@@ -158,6 +160,9 @@ class Output():
         # VOC uptake per taxon
         self.VOC_uptake_TaxonSeries = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
 
+        # combined monomer uptake per taxon
+        self.uptake_tax = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
+
         # Osmolytes: taxon-specific production summed over the grid by taxon
         #self.OsmolyteConSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
         #self.OsmolyteIndSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
@@ -191,7 +196,7 @@ class Output():
         self.SubstratesSeries     = pd.concat([self.SubstratesSeries,Substrates_grid['C']], axis=1, sort=False)
         #self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
         
-        # Monomers
+        # Monomers (at the end of each iteration)
         Monomers_grid           = ecosystem.Monomers.groupby(level=0,sort=False).sum()
         Monomers_grid['C'].name = self.cycle*year + (day+1)
         self.MonomersSeries     = pd.concat([self.MonomersSeries,Monomers_grid['C']], axis=1, sort=False)
@@ -247,6 +252,11 @@ class Output():
         # VOC uptake per taxon
         self.VOC_uptake_TaxonSeries = pd.concat([self.VOC_uptake_TaxonSeries, ecosystem.VOC_uptake_tax],axis=1,sort=False)
 
+        # Total monomer uptake
+        Uptake_total = ecosystem.Uptake_tax.sum()
+        self.Uptake_total = pd.concat([self.Uptake_total, pd.Series([Uptake_total], index=[day+1])], axis=0, sort=False)
+        # Monomer Uptake per taxon
+        self.uptake_tax = pd.concat([self.uptake_tax, ecosystem.Uptake_tax],axis=1,sort=False)
     
     def microbes_abundance(self,ecosystem,year, day):
         """

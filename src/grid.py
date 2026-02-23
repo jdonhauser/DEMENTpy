@@ -275,7 +275,7 @@ class Grid():
         # VOC uptake in terms of C (mutiply total uptake by fraction of C):
         # per taxon
         self.VOC_uptake_tax = Uptake.loc["VOC"].sum()
-        self.VOC_uptake_tax = self.VOC_uptake_tax.mul(VOC_ratio.iloc[0,0])
+        self.VOC_uptake_tax = self.VOC_uptake_tax.mul(VOC_ratio.iloc[0,0]) # multiplication by C fraction
         # grid total
         self.VOC_uptake = self.VOC_uptake_tax.sum() # total uptake of VOC monomer across the grid
 
@@ -288,6 +288,11 @@ class Grid():
         C_uptake_df = Uptake.mul(self.Monomer_ratios["C"],axis=0)
         N_uptake_df = Uptake.mul(self.Monomer_ratios["N"],axis=0)
         P_uptake_df = Uptake.mul(self.Monomer_ratios["P"],axis=0)
+        # calculate total monomer uptake per taxon and across the entire grid (in units of C)
+        # per taxon
+        self.Uptake_tax = C_uptake_df.sum(axis=0)
+        self.Uptake_total = self.Uptake_tax.sum()
+        
         # generic multi-index
         C_uptake_df.index = N_uptake_df.index = P_uptake_df.index = [np.arange(self.gridsize).repeat(self.n_monomers),C_uptake_df.index]
         TUC_df = C_uptake_df.groupby(level=[0]).sum()
