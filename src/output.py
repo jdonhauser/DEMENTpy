@@ -104,6 +104,12 @@ class Output():
         Substrates_grid['C'].name = 0  # set the series name to 0
         self.SubstratesSeries     = Substrates_grid['C']
         #self.Substrates_Sum      = pd.Series([Substrates_grid['C'].sum()],index=[0])
+
+        # Substrates with VOCs
+        Substrates_grid_VOC           = data_init['Substrates_VOC'].groupby(level=0,sort=False).sum()
+        Substrates_grid_VOC ['C'].name = 0  # set the series name to 0
+        self.SubstratesSeries_VOC      = Substrates_grid_VOC['C']
+        #self.Substrates_Sum      = pd.Series([Substrates_grid['C'].sum()],index=[0])
         
         # Monomers (at the end of each iteration)
         Monomers_grid           = data_init['Monomers'].groupby(level=0,sort=False).sum()
@@ -194,6 +200,12 @@ class Output():
         Substrates_grid           = ecosystem.Substrates.groupby(level=0,sort=False).sum()
         Substrates_grid['C'].name = self.cycle*year + (day+1) # index the output continuously by day
         self.SubstratesSeries     = pd.concat([self.SubstratesSeries,Substrates_grid['C']], axis=1, sort=False)
+        #self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
+
+        # Substrates with VOCs
+        Substrates_grid_VOC           = ecosystem.Substrates_VOC.groupby(level=0,sort=False).sum()
+        Substrates_grid_VOC['C'].name = self.cycle*year + (day+1) # index the output continuously by day
+        self.SubstratesSeries_VOC     = pd.concat([self.SubstratesSeries_VOC,Substrates_grid_VOC['C']], axis=1, sort=False)
         #self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
         
         # Monomers (at the end of each iteration)
