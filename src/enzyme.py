@@ -86,9 +86,7 @@ class Enzyme:
         ]  # Minimum uptake Km: 0.001
         self.Km_error = parameters.loc["Km_error", 1]  # Error term: default = 0
 
-        self.substrate_index = (
-            substrate_index  # index of substrates in their actual names
-        )
+        self.substrate_index    = substrate_index[0:(len(substrate_index)-1)]    
 
     def enzyme_pool_initialization(self):
         """

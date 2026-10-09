@@ -1,12 +1,12 @@
 import os
 import sys
-import dateutil
+
 import numpy  as np
 import pandas as pd
 
 
-os.chdir('d:/postdocCopenhagen/Methods/modelling/DEMENTpy/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/src')
-sys.path.append('d:/postdocCopenhagen/Methods/modelling/DEMENTpy/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/src')
+os.chdir('d:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/src')
+sys.path.append('d:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/src')
 
 # make other .py files in src/ available. 
 from initialization import initialize_data
@@ -20,13 +20,13 @@ from utility import export
     # output_folder = sys.argv[2]   # output folder name
     # outname       = sys.argv[3]   # output file name and seed of Pseudo-RNG
 
-input_folder  = 'd:/postdocCopenhagen/Methods/modelling/DEMENTpy/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/input'
+input_folder  = 'd:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/input'
 
 # input folder name; e.g., a study site or a project name
 # create output folder
-os.makedirs('d:/postdocCopenhagen/Methods/modelling/DEMENTpy/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output' , exist_ok=True)
-output_folder = 'd:/postdocCopenhagen/Methods/modelling/DEMENTpy/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output'   # output folder name
-outname       = '2026022401'   # prefix for the output file (use date plus index for #of run) at the same time used as rngseed of Pseudo-RNG
+os.makedirs('d:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output' , exist_ok=True)
+output_folder = 'd:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output'   # output folder name
+outname       = '2026100901'   # prefix for the output file (use date plus index for #of run) at the same time used as rngseed of Pseudo-RNG
 site = input_folder       # no forcing and/or parameter switching
 
 
@@ -41,7 +41,7 @@ runtime    = pd.read_csv('runtime.txt',header=None,index_col=0,sep='\t')
 pulse      = int(runtime.loc['pulse',1])         # number of pulses
 cycle      = int(runtime.loc['end_time',1])      # number of time steps in each pulse
 interval   = int(runtime.loc['interval',1])      # interval of time step to record outputs
-Export_format = int(runtime.loc['output_CSV',1])      # interval of time step to record outputs
+# Export_format = int(runtime.loc['output_CSV',1])      # interval of time step to record outputs
 mode       = int(runtime.loc['dispersal',1])     # 0:'default' or 1:'dispersal'
 
 #...Initialize data by calling the Function: Initialize_Data() 
@@ -101,7 +101,4 @@ for p in range(pulse):
 
 #...export the Output_init object to the output_folder using the export() funtion in the utility module 
 os.chdir(output_folder) # not needed if site is an absolute path
-if Export_format == 1:
-    Output_init.export_to_csv(outname)
-else:
-    Output_init.export_to_netcdf(outname)
+Output_init.export_to_csv(outname)

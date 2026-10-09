@@ -279,7 +279,7 @@ class Grid:
         self.Substrates -= SubstrateRatios.mul(
             DecayRates, axis=0
         )  # First remove decayed matter
-        self.Substrates += self.SubInput  # then add daily substrates
+        # self.Substrates += self.SubInput  # then add daily substrates # deactivated => gives indexing error because initial substrate table including VOCs is used to construct the input from sub_mon_input (substrate input function)
         self.Substrates[self.Substrates < 0] = np.float32(0)
 
         # Pass these two back to the global variables to be used in the next method
@@ -326,9 +326,7 @@ class Grid:
         )
 
         # Indices
-        is_org = (self.Monomers.index != "NH4") & (
-            self.Monomers.index != "PO4"
-        )  # organic monomers
+        is_org = (self.Monomers.index != "NH4") & (self.Monomers.index != "PO4") & (self.Monomers.index != "VOC") # organic monomers without VOC
         # is_mineral = (Monomers.index == "NH4") | (Monomers.index == "PO4")
         is_NH4 = self.Monomers.index == "NH4"
         is_PO4 = self.Monomers.index == "PO4"
