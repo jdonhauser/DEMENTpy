@@ -57,6 +57,9 @@ class Output:
         Mic_index = [
             "Tax" + str(i) for i in range(1, n_taxa + 1)
         ]  # microbial taxa index
+        voc_names = [
+            "VOC" + str(i) for i in range(1, int(runtime.loc["n_VOC", 1]) + 1)
+        ]  # VOC monomer/substrate type names
         # number of time steps in each pulse
         self.cycle = int(runtime.loc["end_time", 1])
         # Pass all runtime parameters to Runtime
@@ -126,7 +129,7 @@ class Output:
         self.SubstratesSeries     = Substrates_grid['C']
         #self.Substrates_Sum      = pd.Series([Substrates_grid['C'].sum()],index=[0])
 
-        # Substrates with VOCs
+        # VOC substrate pool remaining in the litter, per VOC type (VOC1, VOC2, VOC3, ...)
         Substrates_grid_VOC           = data_init['Substrates_VOC'].groupby(level=0,sort=False).sum()
         Substrates_grid_VOC ['C'].name = 0  # set the series name to 0
         self.SubstratesSeries_VOC      = Substrates_grid_VOC['C']
@@ -142,11 +145,19 @@ class Output:
         # total monomer uptake
         self.Uptake_total = pd.Series([sum(Monomers_grid["C"])],index=[0])
 
-        # VOCs
-        # Input from litter 
-        self.VOC_litter_input = pd.Series([Monomers_grid.loc["VOC","C"]],index=[0])
-        # Uptake
-        self.VOC_uptake = pd.Series([Monomers_grid.loc["VOC","C"]],index=[0])
+        # VOCs: litter input and uptake, broken out per VOC type (one column per VOC monomer)
+        self.VOC_litter_input = pd.DataFrame(
+            data=[[Monomers_grid.loc[voc_name, "C"] for voc_name in voc_names]],
+            index=[0],
+            columns=voc_names,
+            dtype="float32",
+        )
+        self.VOC_uptake = pd.DataFrame(
+            data=[[Monomers_grid.loc[voc_name, "C"] for voc_name in voc_names]],
+            index=[0],
+            columns=voc_names,
+            dtype="float32",
+        )
         
         # Microbes
         Microbes_grid = data_init["Microbes"].groupby(level=0, sort=False).sum()
@@ -196,8 +207,13 @@ class Output:
         #self.EnzymeIndSeries    = pd.Series(data=[0]*n_taxa,index=Mic_index)
         self.Enzyme_TaxonSeries = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
 
-        # VOC uptake per taxon
-        self.VOC_uptake_TaxonSeries = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
+        # VOC uptake per taxon, broken out per VOC type
+        for voc_name in voc_names:
+            setattr(
+                self,
+                voc_name + "_uptake_TaxonSeries",
+                pd.Series(data=[0] * n_taxa, index=Mic_index, dtype="float32"),
+            )
 
         # combined monomer uptake per taxon
         self.uptake_tax = pd.Series(data=[0]*n_taxa, index=Mic_index, dtype='float32')
@@ -238,7 +254,7 @@ class Output:
         self.SubstratesSeries     = pd.concat([self.SubstratesSeries,Substrates_grid['C']], axis=1, sort=False)
         #self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
 
-        # Substrates with VOCs
+        # VOC substrate pool remaining in the litter, per VOC type
         Substrates_grid_VOC           = ecosystem.Substrates_VOC.groupby(level=0,sort=False).sum()
         Substrates_grid_VOC['C'].name = self.cycle*year + (day+1) # index the output continuously by day
         self.SubstratesSeries_VOC     = pd.concat([self.SubstratesSeries_VOC,Substrates_grid_VOC['C']], axis=1, sort=False)
@@ -251,9 +267,15 @@ class Output:
         #self.Monomers_Sum   = pd.concat([self.Monomers_Sum, pd.Series([sum(Monomers_grid["C"])],  index=[day+1])], axis=0, sort=False)
         #self.NH4Series      = pd.concat([self.NH4Series, pd.Series([Monomers_grid.loc["NH4","N"]],index=[day+1])], axis=0, sort=False)
         #self.PO4Series      = pd.concat([self.PO4Series, pd.Series([Monomers_grid.loc["PO4","P"]],index=[day+1])], axis=0, sort=False)
-        VOC_input = ecosystem.Input_VOC['C'].groupby(level=0,sort=False).sum()
-        VOC_input.name = self.cycle*year + (day+1)
-        self.VOC_litter_input = pd.concat([self.VOC_litter_input, pd.Series([VOC_input.values[0]], index=[day+1])], axis=0, sort=False)
+        # VOC litter input, broken out per VOC type
+        voc_names = self.VOC_litter_input.columns
+        voc_litter_input_row = pd.Series(
+            {voc_name: ecosystem.Input_VOC.loc[voc_name, "C"].sum() for voc_name in voc_names},
+            name=self.cycle * year + (day + 1),
+        )
+        self.VOC_litter_input = pd.concat(
+            [self.VOC_litter_input, voc_litter_input_row.to_frame().T], axis=0, sort=False
+        )
         
         Substrates_grid = ecosystem.Substrates.groupby(level=0, sort=False).sum()
         Substrates_grid["C"].name = self.cycle * year + (
@@ -333,11 +355,26 @@ class Output:
         self.CUE_system = pd.concat([self.CUE_system, pd.Series([ecosystem.CUE_system], index=[day+1],dtype='float32')], axis=0, sort=False)
         # Death toll of stochasticity origin 
         self.Kill       = pd.concat([self.Kill, pd.Series([ecosystem.Kill],index=[day+1],dtype='uint32')], axis=0, sort=False)
-        # VOC uptake
-        VOC_Uptake = ecosystem.VOC_uptake
-        self.VOC_uptake = pd.concat([self.VOC_uptake, pd.Series([VOC_Uptake], index=[day+1])], axis=0, sort=False)
-        # VOC uptake per taxon
-        self.VOC_uptake_TaxonSeries = pd.concat([self.VOC_uptake_TaxonSeries, ecosystem.VOC_uptake_tax],axis=1,sort=False)
+        # VOC uptake, broken out per VOC type
+        voc_uptake_row = pd.Series(
+            {voc_name: ecosystem.VOC_uptake[voc_name] for voc_name in voc_names},
+            name=self.cycle * year + (day + 1),
+        )
+        self.VOC_uptake = pd.concat(
+            [self.VOC_uptake, voc_uptake_row.to_frame().T], axis=0, sort=False
+        )
+        # VOC uptake per taxon, broken out per VOC type
+        for voc_name in voc_names:
+            attr = voc_name + "_uptake_TaxonSeries"
+            setattr(
+                self,
+                attr,
+                pd.concat(
+                    [getattr(self, attr), ecosystem.VOC_uptake_tax[voc_name]],
+                    axis=1,
+                    sort=False,
+                ),
+            )
 
         # Total monomer uptake
         Uptake_total = ecosystem.Uptake_tax.sum()

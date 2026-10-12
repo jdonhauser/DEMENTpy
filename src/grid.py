@@ -46,14 +46,17 @@ class Grid:
         self.n_taxa = int(runtime.loc["n_taxa", 1])
         self.n_substrates = int(runtime.loc["n_substrates", 1])
         self.n_enzymes = int(runtime.loc["n_enzymes", 1])
-        self.n_monomers = self.n_substrates + 3 # increase from +2 to +3 to account for VOCs
+        self.n_VOC = int(runtime.loc["n_VOC", 1])  # number of VOC substrate/monomer types
+        self.VOC_names = ["VOC" + str(i) for i in range(1, self.n_VOC + 1)]
+        self.n_monomers = self.n_substrates + 2 + self.n_VOC # organic substrates + NH4 + PO4 + VOCs
 
         # Degradation
         # self.Substrates_init = data_init['Substrates']                    # Substrates initialized
         self.Substrates = data_init["Substrates"].copy(
             deep=True
         )  # Substrates;df; w/ .copy() avoiding mutation
-        self.Substrates_VOC  = data_init['Substrates_VOC'].copy(deep=True) # Substrates including VOC pool to get stoichiometry of VOCs
+        self.Substrates_VOC  = data_init['Substrates_VOC'].copy(deep=True) # VOC substrate pool (VOC1,VOC2,VOC3,...), tracked separately from the regular substrates
+        self.Cellulose_init  = data_init['Substrates'].loc['Cellulose','C'].copy() # initial cellulose amount, used to gauge how much cellulose has been degraded (affects VOC accessibility)
         self.SubInput = data_init["SubInput"]  # Substrate inputs
         # self.Enzymes_init    = data_init['Enzymes']                       # Initial pool of Enzymes
         self.Enzymes = data_init["Enzymes"].copy(deep=True)  # Enzymes
@@ -66,7 +69,7 @@ class Grid:
         self.R_moist_decay = data_init[
             "R_moist_decay"
         ]  # Rate for change of moisture reaction in decay module
-        self.VOCEmission_adj = np.float32('nan')                      # VOC emission rate from litter storage pool
+        self.VOCEmission_adj = np.float32('nan')                      # VOC emission rate from litter storage pool, per VOC type
 
         #Uptake
         #self.Microbes_init   = data_init['Microbes_pp']                   # microbial community before placement
@@ -287,24 +290,30 @@ class Grid:
         self.DecayRates = DecayRates
 
         # VOC degradation: simple first-order decay with temperature dependence using Arrhenius equation, with Ea = 20
-        #sum all elements
-        VOC_tot = self.Substrates_VOC.loc["VOC"].sum(axis=1)
-        VOCEmission = Arrhenius(0.005 * VOC_tot, 20, self.temp[day]) 
-        # adjust accessibility of VOCs by amount of cellulose degraded, using exponential function increasing with the amount of cellulose degraded
-        # amount of cellulose degraded 
-        Cel = self.Substrates_VOC.loc["Cellulose","C"] - self.Substrates.loc["Cellulose","C"]
-        # fraction
-        Cel_rel = Cel.divide(self.Substrates_VOC.loc["Cellulose","C"])
-        Cel_rel.index = VOCEmission.index
-        VOCEmission_adj = VOCEmission.where(Cel_rel > 0,VOCEmission.mul(np.exp(5*Cel_rel)),axis=0)
+        # amount and fraction of cellulose degraded so far (shared across all VOC types, for now)
+        Cel = self.Cellulose_init - self.Substrates.loc["Cellulose", "C"]
+        Cel_rel = Cel.divide(self.Cellulose_init)
 
-        # calculate emission for each element
-        SubstrateRatios_VOC = self.Substrates_VOC.loc["VOC"].divide(VOC_tot,axis=0)
-        SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
-        VOCEmission_adj_cnp = SubstrateRatios_VOC.mul(VOCEmission_adj,axis=0)
-     
-        # Update VOC pool
-        self.Substrates_VOC.loc["VOC"] -= VOCEmission_adj_cnp
+        VOCEmission_adj = {}
+        for voc_name in self.VOC_names:
+            # sum all elements of this VOC pool
+            VOC_tot = self.Substrates_VOC.loc[voc_name].sum(axis=1)
+            VOCEmission = Arrhenius(0.005 * VOC_tot, 20, self.temp[day])
+            # adjust accessibility of VOCs by amount of cellulose degraded, using exponential function increasing with the amount of cellulose degraded
+            Cel_rel.index = VOCEmission.index
+            VOCEmission_adj_i = VOCEmission.where(
+                Cel_rel > 0, VOCEmission.mul(np.exp(5 * Cel_rel)), axis=0
+            )
+
+            # calculate emission for each element
+            SubstrateRatios_VOC = self.Substrates_VOC.loc[voc_name].divide(VOC_tot, axis=0)
+            SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
+            VOCEmission_adj_cnp = SubstrateRatios_VOC.mul(VOCEmission_adj_i, axis=0)
+
+            # Update VOC pool
+            self.Substrates_VOC.loc[voc_name] -= VOCEmission_adj_cnp
+            VOCEmission_adj[voc_name] = VOCEmission_adj_i
+
         self.VOCEmission_adj = VOCEmission_adj
 
     def uptake(self,day):
@@ -326,7 +335,11 @@ class Grid:
         )
 
         # Indices
-        is_org = (self.Monomers.index != "NH4") & (self.Monomers.index != "PO4") & (self.Monomers.index != "VOC") # organic monomers without VOC
+        is_org = (
+            (self.Monomers.index != "NH4")
+            & (self.Monomers.index != "PO4")
+            & (~self.Monomers.index.isin(self.VOC_names))
+        )  # organic monomers, excluding inorganic nutrients and VOCs
         # is_mineral = (Monomers.index == "NH4") | (Monomers.index == "PO4")
         is_NH4 = self.Monomers.index == "NH4"
         is_PO4 = self.Monomers.index == "PO4"
@@ -360,24 +373,25 @@ class Grid:
 
         # inputs of organic and mineral monomers
         #Input_Org = MR_transition[is_org].mul(self.MonInput[is_org].tolist(),axis=0)
-        # add temperature dependence for VOC input using arrhenius relationship, with Ea = 20 and A = 40000, according to https://doi.org/10.1016/j.eti.2023.103226
-        # monInput_VOC = self.MonInput.loc["VOC"] 
-        # monInput_VOC = Arrhenius(monInput_VOC,20,self.temp[day])
-        # calculate stoichiometry for VOCs
-        # Calculate total mass of each substrate (C+N+P) and derive substrate stoichiometry
+        # calculate stoichiometry and input for each VOC type
         rss_VOC             = self.Substrates_VOC.sum(axis=1) 
         SubstrateRatios_VOC = self.Substrates_VOC.divide(rss_VOC,axis=0)
         SubstrateRatios_VOC = SubstrateRatios_VOC.fillna(0) # NOTE:ensure NA(b/c of 0/0 in df) = 0
-        VOC_ratio = SubstrateRatios_VOC.loc["VOC"]
-        self.Input_VOC = VOC_ratio.mul(self.VOCEmission_adj,axis=0)
 
-        # Update VOC monomer ratio
-        self.Monomer_ratios.loc["VOC"] = VOC_ratio
+        self.VOC_ratio = {}
+        Input_VOC_list = []
+        for voc_name in self.VOC_names:
+            voc_ratio = SubstrateRatios_VOC.loc[voc_name]
+            self.VOC_ratio[voc_name] = voc_ratio
+            input_voc = voc_ratio.mul(self.VOCEmission_adj[voc_name], axis=0)
+            Input_VOC_list.append(input_voc)
+            # Update VOC monomer ratio and pool
+            self.Monomer_ratios.loc[voc_name] = voc_ratio
+            self.Monomers.loc[voc_name] += input_voc
+        self.Input_VOC = pd.concat(Input_VOC_list, axis=0)
         #Input_Mineral = MR_transition[is_mineral].mul((self.MonInput[is_mineral]).tolist(),axis=0)
         # Monomer pool determined
-        # here temperature dependence function for VOC input could be defined
         # self.Monomers.loc[is_org] += Decay_Org  #  add organic monomers
-        self.Monomers.loc["VOC"] += self.Input_VOC
         # self.Monomers.loc[is_mineral] += Input_Mineral
 
         # Get the total mass of each monomer: C+N+P
@@ -428,12 +442,16 @@ class Grid:
         )  # (Monomer*gridsize) * Taxon
         Uptake.loc[csmu == 0] = np.float32(0)
         # End computing monomer uptake
-        # VOC uptake in terms of C (mutiply total uptake by fraction of C):
-        # per taxon
-        self.VOC_uptake_tax = Uptake.loc["VOC"].sum()
-        self.VOC_uptake_tax = self.VOC_uptake_tax.mul(VOC_ratio.iloc[0,0]) # multiplication by C fraction
-        # grid total
-        self.VOC_uptake = self.VOC_uptake_tax.sum() # total uptake of VOC monomer across the grid
+        # VOC uptake in terms of C (multiply total uptake by the C fraction of each VOC pool)
+        self.VOC_uptake_tax = {}
+        self.VOC_uptake = {}
+        for voc_name in self.VOC_names:
+            # per taxon
+            voc_uptake_tax = Uptake.loc[voc_name].sum()
+            voc_uptake_tax = voc_uptake_tax.mul(self.VOC_ratio[voc_name].iloc[0, 0])  # multiplication by C fraction
+            self.VOC_uptake_tax[voc_name] = voc_uptake_tax
+            # grid total
+            self.VOC_uptake[voc_name] = voc_uptake_tax.sum()  # total uptake of this VOC monomer across the grid
 
         # Update Monomers
         # By monomer: total uptake (monomer*gridsize) * 3(C-N-P)
@@ -868,8 +886,8 @@ class Grid:
         leaching_rate = monomer_leaching(self.psi[day])
         self.Monomers.loc[is_NH4,"N"] -= self.Monomers.loc[is_NH4,"N"] * leaching_rate
         self.Monomers.loc[is_PO4,"P"] -= self.Monomers.loc[is_PO4,"P"] * leaching_rate
-        # set VOC to zero, assuming that all VOCs that are not taken up diffuse
-        self.Monomers.loc["VOC"] = 0
+        # set VOCs to zero, assuming that all VOCs that are not taken up diffuse
+        self.Monomers.loc[self.VOC_names] = 0
         
         # Restore the index to taxa series
         self.Microbes.index = Mic_index
@@ -1027,6 +1045,7 @@ class Grid:
         # reinitialize site-based substrates, monomers, and enzymes in a new pulse
         self.Substrates = initialization["Substrates"].copy(deep=True)
         self.Substrates_VOC = initialization['Substrates_VOC'].copy(deep=True)
+        self.Cellulose_init = initialization["Substrates"].loc["Cellulose", "C"].copy()
         self.Monomers = initialization["Monomers"].copy(deep=True)
         self.Enzymes = initialization["Enzymes"].copy(deep=True)
         self.SubstrateRatios = pd.DataFrame(

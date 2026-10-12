@@ -11,8 +11,9 @@ fb	0.0
 taxa_per_box	0.01
 n_enzymes	50
 n_substrates	12
-n_uptake	14
+n_uptake	17
 n_osmolytes	10
+n_VOC	3
 NormalizeUptake	0
 NormalizeProd	0
 Enzymes_per_sub	1

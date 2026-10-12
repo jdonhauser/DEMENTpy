@@ -44,9 +44,10 @@ class Microbe:
         self.n_taxa = int(runtime.loc["n_taxa", 1])
         self.n_enzymes = int(runtime.loc["n_enzymes", 1])
         self.n_substrates = int(runtime.loc["n_substrates", 1])
+        self.n_VOC = int(runtime.loc["n_VOC", 1])  # number of VOC monomer types
         self.n_monomers = (
-            int(runtime.loc["n_substrates", 1]) + 2
-        )  # +2 b/c of two inorganic monomers
+            int(runtime.loc["n_substrates", 1]) + 2 + self.n_VOC
+        )  # +2 b/c of two inorganic monomers, + n_VOC b/c of VOC monomers
         self.n_uptake = int(
             runtime.loc["n_uptake", 1]
         )  # number of transporters for each taxon
@@ -386,15 +387,36 @@ class Microbe:
         """
         Derive the genes encoding uptake enzymes(transporters).
 
-        All taxa must have at least one uptake gene.
+        All taxa must have at least one uptake gene (either for an organic monomer or a VOC monomer).
 
         Parameters:
             ReqEnz:           3D df (2 * n_substrates * n_enzymes); substrate-required enzymes; from the Substrate class
             EnzGenes:         2D df(taxon*gene); genes encoding enzymes degrading substrates; from the above 'microbe_enzyme_gene' method
             MonomersProduced: dataframe (sub * monomers); from the Substrate class
         Return:
-            UptakeGenes: dataframe(Rows-taxa; Cols-genes); Values: 0 (no gene) or 1 (yes)
+            UptakeGenes: dataframe(Rows-taxa; Cols-genes); Values: 0 (no gene) or 1 (yes).
+                         VOC transporter columns (VOC1..VOCn) are appended after the
+                         organic/inorganic monomer transporter columns.
         """
+
+        # VOC transporters are assigned independently of enzymatic degradation, since VOCs
+        # are released passively from litter (as a function of temperature and cellulose
+        # content) rather than broken down by extracellular enzymes. Each taxon randomly
+        # gets between 0 and n_VOC distinct VOC transporters (mirrors microbe_enzyme_gene()
+        # and microbe_osmolyte_gene(), which draw a per-taxon gene count the same way).
+        voc_columns = ["VOC" + str(i) for i in range(1, self.n_VOC + 1)]
+        voc_per_taxon = np.random.choice(
+            range(0, self.n_VOC + 1), self.n_taxa, replace=True
+        )
+        VOCGenes_list = [
+            random_assignment(i, self.n_VOC, voc_per_taxon) for i in range(self.n_taxa)
+        ]
+        VOCGenes = pd.DataFrame(
+            data=np.vstack(VOCGenes_list),
+            index=self.index,
+            columns=voc_columns,
+            dtype="int8",
+        )
 
         # substrate-required enzymes
         Sub_enz = (
@@ -403,22 +425,28 @@ class Microbe:
         )
         # Matrix multiplication to relate taxa to the monomers they can generate with their enzymes
         UptakeGenes = EnzGenes @ Sub_enz.T @ MonomersProduced
-        UptakeGenes.iloc[:, 0:2] = np.int8(1)
+        UptakeGenes.iloc[:, 0:2] = np.int8(1)  # every taxon can take up NH4 and PO4
         UptakeGenes[lambda df: df > 0] = np.int8(
             1
         )  # == UptakeGenes[UptakeGenes > 0] = 1
 
-        # Ensure every taxon is likely to have an uptake enzyme for at least 1 organic monomer
+        # Ensure every taxon is likely to have an uptake enzyme for at least 1 organic monomer,
+        # unless it already has a VOC transporter, which satisfies the same requirement.
         # Not guaranteed unless uptake_prob = 1 (refer to the R version)
-        probability_list = [0] * (self.n_monomers - 2)
+        n_organic_monomers = self.n_monomers - 2 - self.n_VOC
+        probability_list = [0] * n_organic_monomers
         probability_list[0] = 1
         for i in range(self.n_taxa):
-            if sum(UptakeGenes.iloc[i, 2 : self.n_monomers]) == 0:
-                UptakeGenes.iloc[i, 2 : self.n_monomers] = np.random.choice(
-                    probability_list, self.n_monomers - 2, replace=False
+            if VOCGenes.iloc[i, :].sum() > 0:
+                continue  # already has a VOC transporter
+            if sum(UptakeGenes.iloc[i, 2 : self.n_monomers - self.n_VOC]) == 0:
+                UptakeGenes.iloc[i, 2 : self.n_monomers - self.n_VOC] = np.random.choice(
+                    probability_list, n_organic_monomers, replace=False
                 ).astype("int8")
 
-        # Give each taxon a random number of additional uptake genes between the number they have and n_upgenes
+        # Give each taxon a random number of additional uptake genes between the number they
+        # have and n_upgenes, among the organic/inorganic monomers (VOC transporters are
+        # excluded here; they are governed solely by the dedicated draw above)
         for i in range(self.n_taxa):
             zero_index = (UptakeGenes.iloc[i, :] == 0).to_numpy()
             n_zero = int(zero_index.sum())
@@ -432,6 +460,9 @@ class Microbe:
             UptakeGenes.iloc[i, zero_index] = np.random.choice(
                 probability_list, n_zero, replace=False
             ).astype("int8")
+
+        # Append VOC transporter genes after the organic/inorganic monomer transporter genes
+        UptakeGenes = pd.concat([UptakeGenes, VOCGenes], axis=1)
 
         return UptakeGenes
 

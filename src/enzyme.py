@@ -36,7 +36,7 @@ class Enzyme:
         
         self.n_enzymes          = int(runtime.loc['n_enzymes',1])      
         self.n_substrates       = int(runtime.loc['n_substrates',1])
-        self.n_monomers         = self.n_substrates + 3 # change from 2 to 3 to add VOC
+        self.n_monomers         = self.n_substrates + 2 + int(runtime.loc['n_VOC',1]) # organic substrates + NH4 + PO4 + VOCs
         self.n_uptake           = int(runtime.loc['n_uptake',1])
         self.Enz_min            = runtime.loc['Enz_min',1]               # Initial min. enzyme present in terms of carbon
         self.Enz_max            = runtime.loc['Enz_max',1]               # Initial max. enzyme present in terms of carbon
@@ -86,7 +86,7 @@ class Enzyme:
         ]  # Minimum uptake Km: 0.001
         self.Km_error = parameters.loc["Km_error", 1]  # Error term: default = 0
 
-        self.substrate_index    = substrate_index[0:(len(substrate_index)-1)]    
+        self.substrate_index    = substrate_index
 
     def enzyme_pool_initialization(self):
         """

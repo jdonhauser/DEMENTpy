@@ -24,7 +24,8 @@ class Monomer:
              parameters: dataframe; model parameters
         """
 
-        self.n_monomers  = int(runtime.loc['n_substrates',1]) + 3                  # Number of monomers within the system
+        self.n_VOC       = int(runtime.loc['n_VOC',1])                             # Number of VOC monomer types (tracked by the VOCMonomer class)
+        self.n_monomers  = int(runtime.loc['n_substrates',1]) + 2 + self.n_VOC     # Number of monomers within the system (organic + NH4 + PO4 + VOCs)
         self.n_uptake    = int(runtime.loc['n_uptake',1])                          # Number of uptake transporters for each taxon
         self.Monomer_Substrate_Ratio = runtime.loc['Monomer_Substrate_Ratio',1]    # amount of initial monomer relative to substrate per grid box; default:0
         self.Uptake_per_monomer      = int(runtime.loc['Uptake_per_monomer',1])    # number of transporters per monomer;default:1
@@ -36,17 +37,21 @@ class Monomer:
         
     def monomer_initialization(self,substrates_init):
         """
-        Derive the initial pool of monomers.
+        Derive the initial pool of (non-VOC) monomers.
+
+        NOTE: VOC monomers are initialized separately by the VOCMonomer class and are
+        expected to be concatenated onto the dataframe returned here (see initialization.py).
 
         Parameters:
-            substrates_init: dataframe; initial substrates pool; from the substrate module
+            substrates_init: dataframe; initial substrates pool (without VOCs); from the substrate module
         Return:
-            Monomers_df: dataframe (shape:14*3)
+            Monomers_df: dataframe (shape: (n_substrates+2)*3)
         """
 
         # Monomer pool sizes for all elements
         Monomers_array = np.concatenate((np.stack([[0,self.Init_NH4,0],[0,0,self.Init_PO4]]),substrates_init.values*self.Monomer_Substrate_Ratio),axis=0)    
-        index = ["VOC","NH4","PO4","DeadMic","DeadEnz"] + ["Mon" + str(i) for i in range(3,self.n_monomers-3 + 1)]  #NOTE: index starts from 3
+        n_organic = len(substrates_init.index)
+        index = ["NH4","PO4","DeadMic","DeadEnz"] + ["Mon" + str(i) for i in range(3,n_organic + 1)]  #NOTE: index starts from 3
         Monomers_df = pd.DataFrame(data=Monomers_array, index=index, columns=["C","N","P"],dtype='float32')
         
         return Monomers_df

@@ -18,6 +18,7 @@ from microbe import Microbe
 from monomer import Monomer
 from substrate import Substrate
 from utility import expand
+from voc import VOCMonomer, VOCSubstrate
 
 
 def initialize_data(runtime_parameters, site):
@@ -39,6 +40,9 @@ def initialize_data(runtime_parameters, site):
     substrates_init = pd.read_csv(
         site + "/" + "initial_substrates.csv", header=0, index_col=0
     ).astype("float32")  # initial substrates
+    voc_substrates_init = pd.read_csv(
+        site + "/" + "initial_VOC_substrates.csv", header=0, index_col=0
+    ).astype("float32")  # initial VOC substrates (VOC1, VOC2, VOC3, ...)
     sub_mon_input = pd.read_csv(
         site + "/" + "sub_mon_inputs.csv", header=0, index_col=0
     ).astype("float32")  # inputs of substrates and monomers
@@ -60,10 +64,8 @@ def initialize_data(runtime_parameters, site):
 
     #...an instance of Substrate class 
     Substrates = Substrate(runtime_parameters,parameters,substrates_init)
-    #...substrate initial pool size including VOC
+    #...substrate initial pool size
     substrates_initial_pool = Substrates.Substrates_start
-    #...substrate intial pool without VOC
-    substrates_initial_pool_noVOC =  substrates_initial_pool[substrates_initial_pool.index!="VOC"]
     #...substrate input rate
     substrates_input_rate = Substrates.substrate_input(sub_mon_input)
     # ...substrates-produced monomers
@@ -71,14 +73,37 @@ def initialize_data(runtime_parameters, site):
     # ...substrates degradation required enzymes
     substrates_req_enzyme = Substrates.substrate_degradation_enzyme()
 
+    # ...an instance of VOCSubstrate class
+    VOC_Substrates = VOCSubstrate(runtime_parameters, voc_substrates_init)
+    # ...VOC substrate initial pool size
+    voc_substrates_initial_pool = VOC_Substrates.VOC_Start
+
     # ...an instance of Monomer class
     Monomers = Monomer(runtime_parameters, parameters)
-    # ...monomers initial pool size
+    # ...monomers initial pool size (without VOCs)
     monomers_initial_pool = Monomers.monomer_initialization(substrates_initial_pool)
+    # ...an instance of VOCMonomer class
+    VOC_Monomers = VOCMonomer(runtime_parameters)
+    # ...VOC monomers initial pool size
+    voc_monomers_initial_pool = VOC_Monomers.voc_monomer_initialization(
+        voc_substrates_initial_pool.index
+    )
+    # ...combine monomers and VOC monomers into a single pool (VOCs appended at the end)
+    monomers_initial_pool = pd.concat(
+        [monomers_initial_pool, voc_monomers_initial_pool], axis=0
+    )
     # ...initial monomer ratios
     monomer_ratio_inital = Monomers.monomer_ratios(monomers_initial_pool)
-    # ...monomers input rate
+    # ...monomers input rate (without VOCs)
     monomers_input_rate = Monomers.monomer_input_rate(sub_mon_input)
+    # ...VOC monomer input rate: VOCs are only replenished via litter decay (see Grid.uptake()),
+    # so their input rate through this mechanism is 0
+    voc_monomers_input_rate = pd.Series(
+        data=np.zeros(VOC_Substrates.n_VOC, dtype="float32"),
+        index=voc_substrates_initial_pool.index,
+        dtype="float32",
+    )
+    monomers_input_rate = pd.concat([monomers_input_rate, voc_monomers_input_rate])
     # ...monomers uptake required enzymes
     monomers_uptake_reqenzyme = Monomers.monomer_uptake_reqenzyme()
 
@@ -140,8 +165,8 @@ def initialize_data(runtime_parameters, site):
     gridsize = int(runtime_parameters.loc["gridsize", 1])
 
     Data_Dictionary = {
-        "Substrates": expand(substrates_initial_pool_noVOC,gridsize),
-        "Substrates_VOC": expand(substrates_initial_pool, gridsize),
+        "Substrates": expand(substrates_initial_pool,gridsize),
+        "Substrates_VOC": expand(voc_substrates_initial_pool, gridsize),
         "SubInput":   expand(substrates_input_rate,gridsize),
         "ReqEnz":           substrates_req_enzyme,
         "MonomersProduced": substrates_produced_monomers,
