@@ -112,6 +112,9 @@ class Microbe:
         self.Uptake_C_cost_max = parameters.loc[
             "Uptake_C_cost_max", 1
         ]  # Maximum C cost of one transporter gene being encoded
+        self.voc_uptake_prob = parameters.loc[
+            "voc_uptake_prob", 1
+        ]  # Probability that a taxon gets at least one VOC uptake transporter
         # enzyme
         self.Enz_per_taxon_min = int(
             parameters.loc["Enz_per_taxon_min", 1]
@@ -401,13 +404,16 @@ class Microbe:
 
         # VOC transporters are assigned independently of enzymatic degradation, since VOCs
         # are released passively from litter (as a function of temperature and cellulose
-        # content) rather than broken down by extracellular enzymes. Each taxon randomly
-        # gets between 0 and n_VOC distinct VOC transporters (mirrors microbe_enzyme_gene()
-        # and microbe_osmolyte_gene(), which draw a per-taxon gene count the same way).
+        # content) rather than broken down by extracellular enzymes. With probability
+        # voc_uptake_prob a taxon gets between 1 and n_VOC distinct VOC transporters
+        # (uniformly drawn), otherwise it gets none.
         voc_columns = ["VOC" + str(i) for i in range(1, self.n_VOC + 1)]
-        voc_per_taxon = np.random.choice(
-            range(0, self.n_VOC + 1), self.n_taxa, replace=True
-        )
+        has_voc_uptake = np.random.choice([True,False],self.n_taxa,p=[self.voc_uptake_prob,1-self.voc_uptake_prob])
+        voc_per_taxon = np.zeros(self.n_taxa, dtype=int)
+        if self.n_VOC > 0:
+            voc_per_taxon[has_voc_uptake] = np.random.choice(
+                range(1, self.n_VOC + 1), has_voc_uptake.sum(), replace=True
+            )
         VOCGenes_list = [
             random_assignment(i, self.n_VOC, voc_per_taxon) for i in range(self.n_taxa)
         ]

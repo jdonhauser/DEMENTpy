@@ -14,6 +14,7 @@ N_min,0.012
 P_min,0.002
 Uptake_C_cost_min,0.01
 Uptake_C_cost_max,0.1
+voc_uptake_prob,0.2
 Uptake_Maint_cost,0.01
 Enz_per_taxon_min,0
 Enz_per_taxon_max,40
