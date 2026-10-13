@@ -107,34 +107,48 @@ class Monomer:
 
         Make sure each monomer is taken up by at least one transporter and every transporter takes up at least one monomer
         Same number within a row implies redundancy
+
+        VOC monomers (the last n_VOC rows) can only be taken up by the VOC transporters (the last
+        n_VOC columns, matching the VOC1..VOCn genes appended in Microbe.microbe_uptake_gene()),
+        and VOC transporters cannot take up any non-VOC monomer.
         ------------------------------------
         Return:
           Uptake_ReqEnz_df: dataframe; Rows-monomers;cols-uptake enzymes
         """
 
-        probability_list = [0] * self.n_uptake
-        probability_list[0 : self.Uptake_per_monomer] = [1] * self.Uptake_per_monomer
-        Uptake_ReqEnz_list = [
-            np.random.choice(probability_list, self.n_uptake, replace=False)
-            for i in range(self.n_monomers)
-        ]
+        n_mon_nonVOC = self.n_monomers - self.n_VOC
+        n_upt_nonVOC = self.n_uptake - self.n_VOC
+
+        def assign_block(n_mon, n_upt):
+            # each monomer gets Uptake_per_monomer transporters (capped at n_upt) from this block
+            n_per_monomer = min(self.Uptake_per_monomer, n_upt)
+            probability_list = [0] * n_upt
+            probability_list[0:n_per_monomer] = [1] * n_per_monomer
+            block = np.array(
+                [np.random.choice(probability_list, n_upt, replace=False) for i in range(n_mon)],
+                dtype="int8",
+            ).reshape(n_mon, n_upt)
+            # ensure every transporter takes up at least one monomer of this block
+            probability_list = [0] * n_mon
+            probability_list[0] = 1
+            for i in range(n_upt):
+                if block[:, i].sum() == 0:
+                    block[:, i] = np.random.choice(probability_list, n_mon, replace=False)
+            return block
+
+        Uptake_ReqEnz_array = np.zeros((self.n_monomers, self.n_uptake), dtype="int8")
+        Uptake_ReqEnz_array[:n_mon_nonVOC, :n_upt_nonVOC] = assign_block(n_mon_nonVOC, n_upt_nonVOC)
+        if self.n_VOC > 0:
+            Uptake_ReqEnz_array[n_mon_nonVOC:, n_upt_nonVOC:] = assign_block(self.n_VOC, self.n_VOC)
 
         index = ["Mon" + str(i) for i in range(1, self.n_monomers + 1)]
         columns = ["Upt" + str(i) for i in range(1, self.n_uptake + 1)]
         Uptake_ReqEnz_df = pd.DataFrame(
-            data=np.array(Uptake_ReqEnz_list).reshape(self.n_monomers, self.n_uptake),
+            data=Uptake_ReqEnz_array,
             index=index,
             columns=columns,
             dtype="int8",
         )
-        # ensure every monomer has a transporter
-        probability_list = [0] * self.n_monomers
-        probability_list[0] = 1
-        for i in range(self.n_uptake):
-            if sum(Uptake_ReqEnz_df.iloc[:, i]) == 0:
-                Uptake_ReqEnz_df.iloc[:, i] = np.random.choice(
-                    probability_list, self.n_monomers, replace=False
-                ).astype("int8")
 
         return Uptake_ReqEnz_df
 

@@ -26,7 +26,7 @@ input_folder  = 'd:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-out
 # create output folder
 os.makedirs('d:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output' , exist_ok=True)
 output_folder = 'd:/postdocCopenhagen/VOC_model/DEMENT_VOC_v1/DEMENTpy-iss22-outfile-refactor/output'   # output folder name
-outname       = '2026101201'   # prefix for the output file (use date plus index for #of run) at the same time used as rngseed of Pseudo-RNG
+outname       = '2026101301'   # prefix for the output file (use date plus index for #of run) at the same time used as rngseed of Pseudo-RNG
 site = input_folder       # no forcing and/or parameter switching
 
 

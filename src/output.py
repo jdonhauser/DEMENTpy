@@ -260,10 +260,12 @@ class Output:
         self.SubstratesSeries_VOC     = pd.concat([self.SubstratesSeries_VOC,Substrates_grid_VOC['C']], axis=1, sort=False)
         #self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
         
-        # Monomers (at the end of each iteration)
-        Monomers_grid           = ecosystem.Monomers.groupby(level=0,sort=False).sum()
-        Monomers_grid['C'].name = self.cycle*year + (day+1)
-        self.MonomersSeries     = pd.concat([self.MonomersSeries,Monomers_grid['C']], axis=1, sort=False)
+        # Monomers (calculated at the end of each iteration)
+        Monomers_grid = ecosystem.Monomers.groupby(level=0, sort=False).sum()
+        Monomers_grid["C"].name = self.cycle * year + (day + 1)
+        self.MonomersSeries = pd.concat(
+            [self.MonomersSeries, Monomers_grid["C"]], axis=1, sort=False
+        )
         #self.Monomers_Sum   = pd.concat([self.Monomers_Sum, pd.Series([sum(Monomers_grid["C"])],  index=[day+1])], axis=0, sort=False)
         #self.NH4Series      = pd.concat([self.NH4Series, pd.Series([Monomers_grid.loc["NH4","N"]],index=[day+1])], axis=0, sort=False)
         #self.PO4Series      = pd.concat([self.PO4Series, pd.Series([Monomers_grid.loc["PO4","P"]],index=[day+1])], axis=0, sort=False)
@@ -285,16 +287,6 @@ class Output:
             [self.SubstratesSeries, Substrates_grid["C"]], axis=1, sort=False
         )
         # self.Substrates_Sum   = pd.concat([self.Substrates_Sum,pd.Series([Substrates_grid['C'].sum()],index=[day+1])],axis=0,sort=False)
-
-        # Monomers
-        Monomers_grid = ecosystem.Monomers.groupby(level=0, sort=False).sum()
-        Monomers_grid["C"].name = self.cycle * year + (day + 1)
-        self.MonomersSeries = pd.concat(
-            [self.MonomersSeries, Monomers_grid["C"]], axis=1, sort=False
-        )
-        # self.Monomers_Sum   = pd.concat([self.Monomers_Sum, pd.Series([sum(Monomers_grid["C"])],  index=[day+1])], axis=0, sort=False)
-        # self.NH4Series      = pd.concat([self.NH4Series, pd.Series([Monomers_grid.loc["NH4","N"]],index=[day+1])], axis=0, sort=False)
-        # self.PO4Series      = pd.concat([self.PO4Series, pd.Series([Monomers_grid.loc["PO4","P"]],index=[day+1])], axis=0, sort=False)
 
         # Interim Microbes
         # Microbes_interim_grid = ecosystem.Microbes_interim.groupby(level=0,sort=False).sum()

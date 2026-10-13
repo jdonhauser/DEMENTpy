@@ -1,5 +1,5 @@
 pulse	1
-end_time	100
+end_time	365
 x	10
 y	10
 gridsize	100

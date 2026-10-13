@@ -5,6 +5,7 @@ bashscripts/
 
 # output
 output/
+plots/
 
 # documentation
 documentation/DEMENTpy_Documentation.*
