@@ -15,6 +15,7 @@ n_uptake	17
 n_osmolytes	10
 n_VOC	3
 NormalizeUptake	0
+voc_specialist_mode	0
 NormalizeProd	0
 Enzymes_per_sub	1
 Avg_extra_req_enz	0

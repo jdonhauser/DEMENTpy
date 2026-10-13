@@ -60,6 +60,9 @@ class Microbe:
         self.NormalizeUptake = int(
             runtime.loc["NormalizeUptake", 1]
         )  # Normalize uptake investment for the number of uptake genes;default:0
+        self.voc_specialist_mode = int(
+            runtime.loc["voc_specialist_mode", 1]
+        )  # 1: taxa with VOC transporters invest voc_uptake_alloc of their uptake cost in VOC transporters;default:0
         self.NormalizeProd = int(
             runtime.loc["NormalizeProd", 1]
         )  # Normalize enzyme&osmolyte production for the number of enzyme genes;default:0
@@ -115,6 +118,11 @@ class Microbe:
         self.voc_uptake_prob = parameters.loc[
             "voc_uptake_prob", 1
         ]  # Probability that a taxon gets at least one VOC uptake transporter
+        self.voc_uptake_alloc = parameters.loc[
+            "voc_uptake_alloc", 1
+        ]  # Fraction of uptake cost allocated to VOC transporters (voc_specialist_mode = 1)
+        if not 0 <= self.voc_uptake_alloc <= 1:
+            raise ValueError(f"voc_uptake_alloc must be between 0 and 1, got {self.voc_uptake_alloc}")
         # enzyme
         self.Enz_per_taxon_min = int(
             parameters.loc["Enz_per_taxon_min", 1]
@@ -483,6 +491,9 @@ class Microbe:
             Uptake_C_cost_min: 0.01	transporter mg-1 biomass C
             Uptake_C_cost_max: 0.1	transporter mg-1 biomass C
             NormalizeUptake:   normalize uptake investment for the number of uptake genes (0: No, 1: Yes)
+            voc_specialist_mode: if 1, taxa with VOC transporters allocate the fraction voc_uptake_alloc
+                               of their total uptake cost equally to their VOC transporters and the
+                               rest equally to their other transporters (total cost unchanged)
         Returns:
             UptakeProd_series: series; taxon-specific transporter cost
             UptakeGenes_Cost:  dataframe; taxon- and gene-specific transporter cost
@@ -500,6 +511,26 @@ class Microbe:
         if self.NormalizeUptake == 1:
             Normalize = UptakeGenes.sum(axis=1) / self.n_uptake
             UptakeGenes = UptakeGenes.divide(Normalize, axis=0)
+
+        # VOC specialist mode: redistribute each VOC-capable taxon's total uptake investment so that
+        # voc_uptake_alloc goes to its VOC transporters (the last n_VOC columns) and the remainder to
+        # its other transporters, split equally within each group
+        if self.voc_specialist_mode == 1 and self.n_VOC > 0:
+            genes = UptakeGenes.to_numpy(dtype="float64", copy=True)
+            has_gene = genes > 0
+            is_voc = np.zeros(genes.shape[1], dtype=bool)
+            is_voc[-self.n_VOC :] = True
+            total = genes.sum(axis=1)
+            n_voc_genes = has_gene[:, is_voc].sum(axis=1)
+            n_other_genes = has_gene[:, ~is_voc].sum(axis=1)
+            specialist = (n_voc_genes > 0) & (n_other_genes > 0)
+            voc_share = total[specialist] * self.voc_uptake_alloc / n_voc_genes[specialist]
+            other_share = total[specialist] * (1 - self.voc_uptake_alloc) / n_other_genes[specialist]
+            genes[np.ix_(specialist, is_voc)] = has_gene[np.ix_(specialist, is_voc)] * voc_share[:, None]
+            genes[np.ix_(specialist, ~is_voc)] = has_gene[np.ix_(specialist, ~is_voc)] * other_share[:, None]
+            UptakeGenes = pd.DataFrame(
+                genes, index=UptakeGenes.index, columns=UptakeGenes.columns, dtype="float32"
+            )
 
         # Derive gene-specific production efficiency of each taxon
         UptakeGenes_Cost = UptakeGenes.mul(UptakeProd_series, axis=0)
