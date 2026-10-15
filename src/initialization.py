@@ -241,6 +241,12 @@ def initialize_data(runtime_parameters, site):
         "TaxDroughtTol": expand(
             microbial_drought_tol, gridsize
         ),  # distribution of taxon-specific drought tol.
+        "VOCAllocTarget": expand(
+            Microbes.voc_alloc_target, gridsize
+        ),  # target fraction of uptake cost for VOC transporters (voc_specialist_mode)
+        "VOCSpecialistFactor": expand(
+            Microbes.voc_specialist_factor, gridsize
+        ),  # factor scaling non-VOC transporter and enzyme investment (voc_specialist_mode)
         "basal_death_prob": microbial_mortality[0],  # basal death probability
         "death_rate": microbial_mortality[
             1

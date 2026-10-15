@@ -83,6 +83,8 @@ class Output:
                 data_init["OsmoProdConsti_trait"][0:n_taxa],
                 data_init["OsmoProdInduci_trait"][0:n_taxa],
                 data_init["TaxDroughtTol"][0:n_taxa],
+                data_init["VOCAllocTarget"][0:n_taxa],
+                data_init["VOCSpecialistFactor"][0:n_taxa],
             ),
             axis=0,
         )
@@ -100,9 +102,11 @@ class Output:
             "Osmo_Consti_Cost",
             "Osmo_Induci_Cost",
             "Drought_tolerance",
+            "VOC_alloc_target",
+            "VOC_specialist_factor",
         ]
         self.Microbial_traits = pd.DataFrame(
-            data=data.reshape(13, n_taxa).T,
+            data=data.reshape(len(columns), n_taxa).T,
             index=Mic_index,
             columns=columns,
             dtype="float32",
