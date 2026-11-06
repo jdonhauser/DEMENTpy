@@ -131,6 +131,8 @@ class Grid:
         self.Taxon_Uptake_C = np.float32("nan")  # taxon uptake of C
         self.Taxon_Uptake_N = np.float32("nan")  # taxon uptake of N
         self.Taxon_Uptake_P = np.float32("nan")  # taxon uptake of P
+        self.VOC_AE_penalty = data_init["VOC_AE_penalty"]  # monomer-specific AE reduction (VOCs only)
+        self.Taxon_AE_Penalty_C = np.float32("nan")  # taxon C uptake lost through the VOC AE penalty
         self.R_moist_uptake = data_init[
             "R_moist_uptake"
         ]  # Rate for change of moisture reaction in uptake module
@@ -409,7 +411,7 @@ class Grid:
         ) * Allison(self.R_moist_uptake, self.wp_fc, self.psi[day])
         Uptake_Km = Arrhenius(self.Uptake_Km0, self.Km_Ea, self.temp[day])
 
-        # Equation for hypothetical potential uptake (per unit of compatible uptake protein)
+        # Michaelis Menten equation for hypothetical potential uptake (per unit of compatible uptake protein)
         Potential_Uptake = (self.Uptake_ReqEnz * Uptake_Vmax).mul(
             rsm.values, axis=0
         ) / Uptake_Km.add(rsm.values, axis=0)
@@ -463,13 +465,15 @@ class Grid:
         C_uptake_df = Uptake.mul(self.Monomer_ratios["C"],axis=0)
         N_uptake_df = Uptake.mul(self.Monomer_ratios["N"],axis=0)
         P_uptake_df = Uptake.mul(self.Monomer_ratios["P"],axis=0)
+        # C uptake respired on top of the reference AE (monomer-specific penalty; VOCs only)
+        AE_penalty_C_df = C_uptake_df.mul(self.VOC_AE_penalty.values, axis=0)
         # calculate total monomer uptake per taxon and across the entire grid (in units of C)
         # per taxon
         self.Uptake_tax = C_uptake_df.sum(axis=0)
         self.Uptake_total = self.Uptake_tax.sum()
         
         # generic multi-index
-        C_uptake_df.index = N_uptake_df.index = P_uptake_df.index = [
+        C_uptake_df.index = N_uptake_df.index = P_uptake_df.index = AE_penalty_C_df.index = [
             np.arange(self.gridsize).repeat(self.n_monomers),
             C_uptake_df.index,
         ]
@@ -480,6 +484,9 @@ class Grid:
         self.Taxon_Uptake_C = TUC_df.stack().values  # spatial C uptake: array
         self.Taxon_Uptake_N = TUN_df.stack().values  # spatial N uptake: array
         self.Taxon_Uptake_P = TUP_df.stack().values  # spatial P uptake: array
+        self.Taxon_AE_Penalty_C = (
+            AE_penalty_C_df.groupby(level=[0]).sum().stack().values
+        )  # spatial C lost through the VOC AE penalty: array
 
     def metabolism(self, day):
         """
@@ -576,23 +583,26 @@ class Grid:
             + (self.temp[day] - (self.Tref - np.float32(273))) * self.AE_temp
         )  # scalar
 
+        # Assimilated C: reference AE minus the monomer-specific VOC penalty
+        Taxon_Assim_C = np.maximum(
+            self.Taxon_Uptake_C * Taxon_AE - self.Taxon_AE_Penalty_C, np.float32(0)
+        )
+
         # Taxon growth respiration
-        Taxon_Growth_Respiration = self.Taxon_Uptake_C * (np.float32(1) - Taxon_AE)
+        Taxon_Growth_Respiration = self.Taxon_Uptake_C - Taxon_Assim_C
 
         # derive the water potential modifier by calling the function microbe_osmo_psi()
         f_psi = microbe_osmo_psi(self.alpha, self.wp_fc, self.psi[day])
 
         # Inducible Osmolyte production only when psi reaches below wp_fc
         Taxon_Osmo_Induci = (
-            self.Induci_Osmo_C.mul(self.Taxon_Uptake_C * Taxon_AE, axis=0) * f_psi
+            self.Induci_Osmo_C.mul(Taxon_Assim_C, axis=0) * f_psi
         )
         Taxon_Osmo_Induci_Cost_N = (Taxon_Osmo_Induci * Osmo_N_cost).sum(
             axis=1
         )  # Total osmotic N cost of each taxon (.sum(axis=1))
         # Inducible enzyme production
-        Taxon_Enzyme_Induci = self.Induci_Enzyme_C.mul(
-            self.Taxon_Uptake_C * Taxon_AE, axis=0
-        )
+        Taxon_Enzyme_Induci = self.Induci_Enzyme_C.mul(Taxon_Assim_C, axis=0)
         Taxon_Enzyme_Induci_Cost_N = (
             Taxon_Enzyme_Induci.mul(self.Enz_Attrib["N_cost"], axis=1)
         ).sum(axis=1)  # Total enzyme N cost of each taxon (.sum(axis=1))
