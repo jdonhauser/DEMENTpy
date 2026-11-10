@@ -43,9 +43,9 @@ def initialize_data(runtime_parameters, site):
     voc_substrates_init = pd.read_csv(
         site + "/" + "initial_VOC_substrates.csv", header=0, index_col=0
     ).astype("float32")  # initial VOC substrates (VOC1, VOC2, VOC3, ...)
-    voc_attributes = pd.read_csv(
-        site + "/" + "VOC_attributes.csv", header=0, index_col=0
-    ).reindex(voc_substrates_init.index)  # VOC molecular weight and number of C atoms
+    monomer_attributes = pd.read_csv(
+        site + "/" + "monomer_attributes.csv", header=0, index_col=0
+    )  # (conceptual) molecular weight of all monomers incl. VOCs
     sub_mon_input = pd.read_csv(
         site + "/" + "sub_mon_inputs.csv", header=0, index_col=0
     ).astype("float32")  # inputs of substrates and monomers
@@ -86,7 +86,7 @@ def initialize_data(runtime_parameters, site):
     # ...monomers initial pool size (without VOCs)
     monomers_initial_pool = Monomers.monomer_initialization(substrates_initial_pool)
     # ...an instance of VOCMonomer class
-    VOC_Monomers = VOCMonomer(runtime_parameters, parameters, voc_attributes)
+    VOC_Monomers = VOCMonomer(runtime_parameters)
     # ...VOC monomers initial pool size
     voc_monomers_initial_pool = VOC_Monomers.voc_monomer_initialization(
         voc_substrates_initial_pool.index
@@ -95,6 +95,8 @@ def initialize_data(runtime_parameters, site):
     monomers_initial_pool = pd.concat(
         [monomers_initial_pool, voc_monomers_initial_pool], axis=0
     )
+    # ...molecular weight of all monomers (incl. VOCs)
+    Monomers.monomer_MW(monomer_attributes, monomers_initial_pool.index)
     # ...initial monomer ratios
     monomer_ratio_inital = Monomers.monomer_ratios(monomers_initial_pool)
     # ...monomers input rate (without VOCs)
@@ -128,12 +130,12 @@ def initialize_data(runtime_parameters, site):
     enzymes_Km = Enzymes.enzyme_Km(enzymes_Vmax)
     # ...monomers uptake enzyme Km
     enzymes_uptake_Km = Enzymes.enzyme_uptake_Km(enzymes_uptake_Vmax)
-    # ...scale VOC uptake Vmax and Km with molecular weight (after the Vmax-Km tradeoff)
-    enzymes_uptake_Vmax, enzymes_uptake_Km = VOC_Monomers.voc_uptake_kinetics(
+    # ...molar conversion of monomer concentrations in uptake (after the Vmax-Km tradeoff; MW_mode)
+    enzymes_uptake_Vmax, enzymes_uptake_Km = Monomers.monomer_uptake_kinetics(
         enzymes_uptake_Vmax, enzymes_uptake_Km
     )
-    # ...monomer-specific reduction of assimilation efficiency (VOCs only)
-    voc_AE_penalty = VOC_Monomers.voc_AE_penalty(monomers_initial_pool.index)
+    # ...monomer-specific reduction of assimilation efficiency (MW_mode, C1_penalty_mode)
+    monomer_AE_penalty = Monomers.monomer_AE_penalty()
 
     # ...an instance of Microbe class
     Microbes = Microbe(runtime_parameters, parameters)
@@ -266,9 +268,9 @@ def initialize_data(runtime_parameters, site):
         "AE_temp": parameters.loc[
             "CUE_temp", 1
         ],  # AE temperature sensitivity; default: -0.016
-        "VOC_AE_penalty": expand(
-            voc_AE_penalty, gridsize
-        ),  # monomer-specific AE reduction (size-dependent; VOCs only)
+        "AE_penalty": expand(
+            monomer_AE_penalty, gridsize
+        ),  # monomer-specific AE reduction (MW-dependent)
         "Uptake_Maint_cost": parameters.loc[
             "Uptake_Maint_cost", 1
         ],  # constant of transporter maintenence cost

@@ -131,8 +131,8 @@ class Grid:
         self.Taxon_Uptake_C = np.float32("nan")  # taxon uptake of C
         self.Taxon_Uptake_N = np.float32("nan")  # taxon uptake of N
         self.Taxon_Uptake_P = np.float32("nan")  # taxon uptake of P
-        self.VOC_AE_penalty = data_init["VOC_AE_penalty"]  # monomer-specific AE reduction (VOCs only)
-        self.Taxon_AE_Penalty_C = np.float32("nan")  # taxon C uptake lost through the VOC AE penalty
+        self.AE_penalty = data_init["AE_penalty"]  # monomer-specific AE reduction (MW-dependent)
+        self.Taxon_AE_Penalty_C = np.float32("nan")  # taxon C uptake lost through the AE penalty
         self.R_moist_uptake = data_init[
             "R_moist_uptake"
         ]  # Rate for change of moisture reaction in uptake module
@@ -465,8 +465,8 @@ class Grid:
         C_uptake_df = Uptake.mul(self.Monomer_ratios["C"],axis=0)
         N_uptake_df = Uptake.mul(self.Monomer_ratios["N"],axis=0)
         P_uptake_df = Uptake.mul(self.Monomer_ratios["P"],axis=0)
-        # C uptake respired on top of the reference AE (monomer-specific penalty; VOCs only)
-        AE_penalty_C_df = C_uptake_df.mul(self.VOC_AE_penalty.values, axis=0)
+        # C uptake respired on top of the reference AE (monomer-specific, MW-dependent penalty)
+        AE_penalty_C_df = C_uptake_df.mul(self.AE_penalty.values, axis=0)
         # calculate total monomer uptake per taxon and across the entire grid (in units of C)
         # per taxon
         self.Uptake_tax = C_uptake_df.sum(axis=0)
@@ -486,7 +486,7 @@ class Grid:
         self.Taxon_Uptake_P = TUP_df.stack().values  # spatial P uptake: array
         self.Taxon_AE_Penalty_C = (
             AE_penalty_C_df.groupby(level=[0]).sum().stack().values
-        )  # spatial C lost through the VOC AE penalty: array
+        )  # spatial C lost through the AE penalty: array
 
     def metabolism(self, day):
         """
@@ -583,7 +583,7 @@ class Grid:
             + (self.temp[day] - (self.Tref - np.float32(273))) * self.AE_temp
         )  # scalar
 
-        # Assimilated C: reference AE minus the monomer-specific VOC penalty
+        # Assimilated C: reference AE minus the monomer-specific penalty
         Taxon_Assim_C = np.maximum(
             self.Taxon_Uptake_C * Taxon_AE - self.Taxon_AE_Penalty_C, np.float32(0)
         )
