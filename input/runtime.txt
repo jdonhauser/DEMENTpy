@@ -15,6 +15,7 @@ NormalizeUptake	0
 voc_specialist_mode	1
 MW_mode	1
 C1_penalty_mode	0
+VOC_production_mode	1
 NormalizeProd	0
 Enzymes_per_sub	1
 Avg_extra_req_enz	0

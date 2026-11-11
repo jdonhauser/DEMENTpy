@@ -11,6 +11,27 @@ import numpy as np
 import pandas as pd
 
 
+def voc_production(respiration, frac, resp_ref, exponent):
+    """
+    Microbial VOC production as a supralinear function of respiration (CO2 production).
+
+        VOC = frac * resp_ref * (respiration / resp_ref) ** exponent
+
+    At respiration == resp_ref, VOC production is the fraction `frac` of respired C; with
+    exponent > 1 the VOC:CO2 ratio increases with metabolic activity.
+
+    Parameters:
+        respiration: array; respiration (mg C day-1) of each taxon in each grid cell
+        frac:        scalar; VOC C produced per unit respired C at the reference respiration
+        resp_ref:    scalar; reference respiration (mg C day-1) at which VOC:CO2 = frac
+        exponent:    scalar; scaling exponent (> 1: supralinear)
+    Returns:
+        array; VOC C produced (mg C day-1), same shape as respiration
+    """
+    respiration = np.clip(np.asarray(respiration, dtype="float64"), 0, None)
+    return (frac * resp_ref * (respiration / resp_ref) ** exponent).astype("float32")
+
+
 class VOCSubstrate:
     """
     Deals with properties related to VOC substrates (the VOC pool entrapped in litter).

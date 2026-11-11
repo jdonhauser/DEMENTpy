@@ -10,8 +10,8 @@ plots/
 # documentation
 documentation/DEMENTpy_Documentation.*
 
-# DEMENTpy_notebooks
-DEMENTpy_notebooks/
+# plotting notebooks
+plot_VOC_output.ipynb
 
 
 ### Generic python .gitignore from GitHub

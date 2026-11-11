@@ -298,6 +298,15 @@ def initialize_data(runtime_parameters, site):
         "R_moist_uptake": parameters.loc[
             "R_moist_uptake", 1
         ],  # factor in the Allison equation for moisture (Uptake part)
+        "VOC_prod_frac": parameters.loc[
+            "VOC_prod_frac", 1
+        ],  # microbial VOC production: VOC:CO2 ratio at the reference respiration
+        "VOC_prod_R_ref": parameters.loc[
+            "VOC_prod_R_ref", 1
+        ],  # microbial VOC production: reference respiration (mg C taxon-1 gridcell-1 day-1)
+        "VOC_prod_exp": parameters.loc[
+            "VOC_prod_exp", 1
+        ],  # microbial VOC production: scaling exponent with respiration (>1: supralinear)
         "Temp": daily_temp,  # temperature
         "Psi": daily_psi,  # water potential
     }

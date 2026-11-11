@@ -162,6 +162,17 @@ class Output:
             columns=voc_names,
             dtype="float32",
         )
+        # microbial VOC production (VOC3) over the grid, by C source; enters the VOC pool the next day
+        self.VOC_production = pd.DataFrame(
+            data=[[0.0, 0.0, 0.0]],
+            index=[0],
+            columns=["from_biomass", "from_uptake", "total"],
+            dtype="float32",
+        )
+        # microbial VOC production per taxon
+        self.VOC_production_TaxonSeries = pd.Series(
+            data=[0] * n_taxa, index=Mic_index, dtype="float32"
+        )
         
         # Microbes
         Microbes_grid = data_init["Microbes"].groupby(level=0, sort=False).sum()
@@ -358,6 +369,19 @@ class Output:
         )
         self.VOC_uptake = pd.concat(
             [self.VOC_uptake, voc_uptake_row.to_frame().T], axis=0, sort=False
+        )
+        # Microbial VOC production, by C source and per taxon
+        voc_prod = ecosystem.VOC_production
+        voc_prod_row = pd.DataFrame(
+            [[voc_prod["from_biomass"], voc_prod["from_uptake"],
+              voc_prod["from_biomass"] + voc_prod["from_uptake"]]],
+            index=[self.cycle * year + (day + 1)],
+            columns=self.VOC_production.columns,
+            dtype="float32",
+        )
+        self.VOC_production = pd.concat([self.VOC_production, voc_prod_row], axis=0, sort=False)
+        self.VOC_production_TaxonSeries = pd.concat(
+            [self.VOC_production_TaxonSeries, ecosystem.VOC_production_tax], axis=1, sort=False
         )
         # VOC uptake per taxon, broken out per VOC type
         for voc_name in voc_names:

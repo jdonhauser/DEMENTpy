@@ -11,6 +11,7 @@ from microbe import microbe_mortality_prob as MMP
 from microbe import microbe_osmo_psi
 from monomer import monomer_leaching
 from utility import expand
+from voc import voc_production
 
 
 class Grid:
@@ -158,6 +159,24 @@ class Grid:
         self.AE_temp = data_init["AE_temp"]  # AE sensitivity to temperature;scalar
         self.Respiration = np.float32("nan")  # Respiration
         self.CUE_system = np.float32("nan")  # emergent CUE
+
+        # Microbial VOC production (VOC_production_mode = 1)
+        self.VOC_production_mode = int(runtime.loc["VOC_production_mode", 1])
+        self.VOC_prod_name = "VOC3"  # VOC type produced by microbes
+        if self.VOC_production_mode and self.VOC_prod_name not in self.VOC_names:
+            raise ValueError(
+                f"VOC_production_mode = 1 requires {self.VOC_prod_name}, but n_VOC = {self.n_VOC}"
+            )
+        self.VOC_prod_frac = data_init["VOC_prod_frac"]  # VOC:CO2 ratio at the reference respiration
+        self.VOC_prod_R_ref = data_init["VOC_prod_R_ref"]  # reference respiration per taxon and grid cell
+        self.VOC_prod_exp = data_init["VOC_prod_exp"]  # scaling exponent of VOC production with respiration
+        # VOC produced in a time step, per grid cell; added to the VOC monomer pool in the next uptake step
+        self.VOC_produced = np.zeros(self.gridsize, dtype="float32")
+        # VOC production per taxon (summed over the grid) and grid totals by C source, of the last time step
+        self.VOC_production_tax = pd.Series(
+            0, index=self.Microbes.index[0 : self.n_taxa], dtype="float32"
+        )
+        self.VOC_production = {"from_biomass": 0.0, "from_uptake": 0.0}
         # self.Transporters = float('nan')
         # self.Osmolyte_Con = float('nan')
         # self.Osmolyte_Ind = float('nan')
@@ -391,6 +410,23 @@ class Grid:
             self.Monomer_ratios.loc[voc_name] = voc_ratio
             self.Monomers.loc[voc_name] += input_voc
         self.Input_VOC = pd.concat(Input_VOC_list, axis=0)
+
+        # Microbially produced VOC (pure C) from the previous time step joins the litter-released VOC
+        if self.VOC_production_mode:
+            voc = self.VOC_prod_name
+            self.Monomers.loc[voc, "C"] += self.VOC_produced
+            self.VOC_produced = np.zeros(self.gridsize, dtype="float32")
+            # stoichiometry of this VOC follows the pool (litter + microbial), not the litter alone,
+            # so that uptake of microbial VOC is accounted for once the litter pool is exhausted
+            voc_pool = self.Monomers.loc[voc]
+            voc_tot = voc_pool.sum(axis=1).values
+            has_pool = voc_tot > 0
+            voc_ratio = self.VOC_ratio[voc].values.copy()
+            voc_ratio[has_pool] = voc_pool.values[has_pool] / voc_tot[has_pool, None]
+            self.VOC_ratio[voc] = pd.DataFrame(
+                voc_ratio, index=voc_pool.index, columns=voc_pool.columns
+            )
+            self.Monomer_ratios.loc[voc] = voc_ratio
         #Input_Mineral = MR_transition[is_mineral].mul((self.MonInput[is_mineral]).tolist(),axis=0)
         # Monomer pool determined
         # self.Monomers.loc[is_org] += Decay_Org  #  add organic monomers
@@ -654,6 +690,37 @@ class Grid:
         )
         Microbe_P_Gain = self.Taxon_Uptake_P - Taxon_Enzyme_Induci_Cost_P
 
+        # ---------------------------------------------------------------------#
+        # .....Microbial VOC production.........................................#
+        # ---------------------------------------------------------------------#
+        # VOC production scales supralinearly with respiration of each taxon in each grid cell.
+        # The share matching constitutive respiration (transporter, constitutive osmolyte and
+        # enzyme maintenance) is taken from biomass; the share matching all other respiration
+        # (growth respiration, inducible osmolyte and enzyme maintenance) from uptake.
+        Taxon_Resp_Consti = (
+            Taxon_Transporter_Maint + Taxon_Osmo_Consti_Maint + Taxon_Enzyme_Consti_Maint
+        ).values
+        Taxon_Resp_Induci = (
+            Taxon_Growth_Respiration + Taxon_Osmo_Induci_Maint + Taxon_Enzyme_Induci_Maint
+        ).values
+        VOC_from_biomass = np.zeros(self.n_taxa * self.gridsize, dtype="float32")
+        VOC_from_uptake = np.zeros(self.n_taxa * self.gridsize, dtype="float32")
+        if self.VOC_production_mode:
+            Resp_consti = np.clip(Taxon_Resp_Consti, 0, None)
+            Resp_total = Resp_consti + np.clip(Taxon_Resp_Induci, 0, None)
+            VOC_total = voc_production(
+                Resp_total, self.VOC_prod_frac, self.VOC_prod_R_ref, self.VOC_prod_exp
+            )
+            share_consti = np.divide(
+                Resp_consti, Resp_total, out=np.zeros_like(Resp_total), where=Resp_total > 0
+            )
+            # from uptake: limited to the C gained from uptake after inducible costs
+            VOC_from_uptake = np.minimum(
+                VOC_total * (1 - share_consti), np.clip(Microbe_C_Gain.values, 0, None)
+            )
+            Microbe_C_Gain = Microbe_C_Gain - VOC_from_uptake
+            VOC_from_biomass = VOC_total * share_consti  # limited to the remaining biomass below
+
         self.Taxon_Enzyme_Cost_C = (
             Taxon_Enzyme_Induci_Cost_C + Taxon_Enzyme_Consti_Cost_C
         )
@@ -679,6 +746,25 @@ class Grid:
             Microbe_N_Gain - Taxon_Enzyme_Consti_Cost_N - Taxon_Osmo_Consti_Cost_N
         )
         self.Microbes.loc[:, "P"] += Microbe_P_Gain - Taxon_Enzyme_Consti_Cost_P
+        if self.VOC_production_mode:
+            # VOC from biomass: limited to the biomass C left after constitutive costs
+            VOC_from_biomass = np.minimum(
+                VOC_from_biomass, np.clip(self.Microbes["C"].values, 0, None)
+            )
+            self.Microbes.loc[:, "C"] -= VOC_from_biomass
+            self.Microbe_C_Gain = self.Microbe_C_Gain - VOC_from_biomass
+            VOC_produced_tax = VOC_from_biomass + VOC_from_uptake
+            # add to the per-grid-cell pool released in the next time step (see uptake())
+            self.VOC_produced += VOC_produced_tax.reshape(self.gridsize, self.n_taxa).sum(axis=1)
+            self.VOC_production_tax = (
+                pd.Series(VOC_produced_tax, index=self.Microbes.index)
+                .groupby(level=0, sort=False)
+                .sum()
+            )
+            self.VOC_production = {
+                "from_biomass": float(VOC_from_biomass.sum()),
+                "from_uptake": float(VOC_from_uptake.sum()),
+            }
         self.Microbes[self.Microbes < 0] = np.float32(0)  # avoid negative values
 
         # Taxon-specific emergent CUE
@@ -1057,6 +1143,7 @@ class Grid:
         self.Substrates_VOC = initialization['Substrates_VOC'].copy(deep=True)
         self.Cellulose_init = initialization["Substrates"].loc["Cellulose", "C"].copy()
         self.Monomers = initialization["Monomers"].copy(deep=True)
+        self.VOC_produced = np.zeros(self.gridsize, dtype="float32")  # microbial VOC not carried over
         self.Enzymes = initialization["Enzymes"].copy(deep=True)
         self.SubstrateRatios = pd.DataFrame(
             np.zeros_like(initialization["Substrates"]),
